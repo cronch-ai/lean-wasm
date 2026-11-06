@@ -1,0 +1,26 @@
+{
+	"name": "@cronch/lean",
+	"version": "0.1.0",
+	"description": "nanoda, an independent Lean kernel, for Cloudflare Workers: checks a Lean proof against a pinned statement",
+	"license": "Apache-2.0",
+	"type": "module",
+	"exports": {
+		".": {
+			"types": "./index.d.ts",
+			"default": "./index.js"
+		},
+		"./lean.wasm": "./lean.wasm",
+		"./lean.sha256": "./lean.sha256"
+	},
+	"files": [
+		"index.js",
+		"index.d.ts",
+		"lean.wasm",
+		"lean.sha256",
+		"LICENSE-nanoda"
+	],
+	"scripts": {
+		"build": "../scripts/build.sh",
+		"test": "node --test"
+	}
+}

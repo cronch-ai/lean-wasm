@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+
+  build:
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99.1
+          targets: wasm32-unknown-unknown
+          components: rustfmt, clippy
+      - run: ./scripts/build.sh
+      - run: cargo fmt --check
+      - run: cargo clippy --release --locked --target wasm32-unknown-unknown -- -D warnings
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm test --prefix javascript
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lean
+          path: |
+            javascript/lean.wasm
+            javascript/lean.sha256
+
+  # Pushes to main publish a release when javascript/package.json has a new version.
+  release:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: lean
+          path: javascript
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(jq -r .version javascript/package.json)
+          if gh release view "v$version" >/dev/null 2>&1; then
+            echo "v$version is already released."
+            exit 0
+          fi
+          tarball=$(cd javascript && npm pack --silent)
+          gh release create "v$version" javascript/lean.wasm javascript/lean.sha256 "javascript/$tarball" \
+            --target "$GITHUB_SHA" --generate-notes

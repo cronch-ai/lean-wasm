@@ -1,0 +1,9 @@
+node_modules/
+*.tgz
+# nanoda's source, the Rust build, and what the build makes
+/build/
+/target/
+javascript/lean.wasm
+javascript/lean.sha256
+# Lake's build of the fixtures
+fixtures/.lake/

@@ -1,0 +1,26 @@
+diff --git a/src/parser.rs b/src/parser.rs
+index 7fef4c4..b8013a5 100644
+--- a/src/parser.rs
++++ b/src/parser.rs
+@@ -381,7 +381,7 @@ enum ExportJsonVal<'a> {
+     },
+ }
+ 
+-pub(crate) fn parse_export_file<'p, R: BufRead>(
++pub fn parse_export_file<'p, R: BufRead>(
+     buf_reader: R,
+     config: Config,
+ 
+diff --git a/src/tc.rs b/src/tc.rs
+index cb61bb4..2de2234 100644
+--- a/src/tc.rs
++++ b/src/tc.rs
+@@ -142,7 +142,7 @@ impl<'p> ExportFile<'p> {
+     }
+ 
+     /// Check all declarations in this export file using a single thread.
+-    pub(crate) fn check_all_declars_serial(&self) {
++    pub fn check_all_declars_serial(&self) {
+         for declar in self.declars.values() {
+             self.check_declar(declar);
+         }

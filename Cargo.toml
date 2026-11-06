@@ -1,0 +1,21 @@
+[package]
+name = "lean-wasm"
+version = "0.0.0"
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# Fetched and patched by scripts/build.sh, at the revision versions.env pins.
+nanoda_lib = { path = "build/nanoda" }
+serde_json = "1"
+
+[profile.release]
+opt-level = 3
+lto = true
+# A panic is how nanoda reports most errors: it traps, and the wrapper reads its message.
+panic = "abort"
+overflow-checks = true
