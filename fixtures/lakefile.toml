@@ -1,0 +1,8 @@
+name = "fixtures"
+
+[[lean_lib]]
+name = "Cronch"
+
+[[lean_lib]]
+name = "Fixtures"
+globs = ["Fixtures.+"]
