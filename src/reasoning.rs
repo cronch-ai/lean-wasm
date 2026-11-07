@@ -422,3 +422,15 @@ pub fn lean(theory: &[u8], call: &Call) -> Result<String, String> {
     let theory = read(theory)?;
     Ok(statement(&theory, call)?.1)
 }
+
+/// The theory's predicates, in `Gamma`'s order, with how many strings each takes, as JSON:
+/// `[{ "name": "late", "arity": 1 }, ...]`.
+pub fn predicates(theory: &[u8]) -> Result<String, String> {
+    let theory = read(theory)?;
+    let list: Vec<Value> = theory
+        .predicates
+        .iter()
+        .map(|(name, arity)| json!({ "name": name, "arity": arity }))
+        .collect();
+    Ok(Value::Array(list).to_string())
+}

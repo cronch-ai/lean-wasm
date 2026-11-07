@@ -53,6 +53,19 @@ test("the statement is every fact in the grant, to the goal, as Lean", async () 
 	assert.match(odd.statement, /refundable "8\\"1\\\\2"$/);
 });
 
+test("the theory's predicates are Gamma's, in its order", async () => {
+	assert.deepEqual(await lean.predicates(theory), {
+		predicates: ["damaged", "late", "premium", "refundable"].map((name) => ({
+			name,
+			arity: 1,
+		})),
+	});
+	assert.match(
+		(await lean.predicates(fixture("Proof"))).error,
+		/declares obligation/,
+	);
+});
+
 test("a proof from the grant's facts is accepted, within a Worker's memory", async () => {
 	const checked = await lean.checkCall(theory, refund(), fixture("Proof"));
 	assert.equal(checked.result, "accepted", checked.reason);

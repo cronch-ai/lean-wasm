@@ -8,6 +8,26 @@ export type Checked =
 			readonly memoryBytes: number;
 	  };
 
+/** What a call asks of a theory: that `goal` follows from `Gamma` and every fact, or that the theory is consistent. */
+export type Call =
+	| {
+			/** Each predicate's facts: an argument, or a list of them for a predicate of more than one. */
+			readonly facts?: Readonly<
+				Record<string, readonly (string | readonly string[])[]>
+			>;
+			readonly goal: {
+				readonly pred: string;
+				readonly args: readonly string[];
+			};
+	  }
+	| { readonly goal: "consistent" };
+
+/** A predicate of a theory's `Gamma`, over `arity` strings. */
+export interface Predicate {
+	readonly name: string;
+	readonly arity: number;
+}
+
 export interface Lean {
 	/**
 	 * Whether `solution` proves the theorem `obligation` of `challenge`. Both are lean4export exports of
@@ -18,6 +38,27 @@ export interface Lean {
 		challenge: string | Uint8Array,
 		solution: string | Uint8Array,
 	): Promise<Checked>;
+
+	/**
+	 * Whether `solution` proves what `call` asks of `theory`, a pinned export defining `Gamma`. The challenge is built
+	 * from them here, then checked as {@link Lean.check} checks one.
+	 */
+	checkCall(
+		theory: string | Uint8Array,
+		call: Call,
+		solution: string | Uint8Array,
+	): Promise<Checked>;
+
+	/** The statement {@link Lean.checkCall} checks, as Lean, or why the theory can't state it. */
+	statement(
+		theory: string | Uint8Array,
+		call: Call,
+	): Promise<{ statement: string } | { error: string }>;
+
+	/** The theory's predicates, in `Gamma`'s order, or why it isn't a theory. */
+	predicates(
+		theory: string | Uint8Array,
+	): Promise<{ predicates: Predicate[] } | { error: string }>;
 }
 
 /** The theorem a solution proves. */
