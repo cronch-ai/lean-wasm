@@ -50,7 +50,7 @@ test("a solution that redefines a name, a notation or an instance is refused", a
 		fixture("Redefine"),
 		/^Smt\.seq\.contains isn't the challenge's$/,
 	);
-	// `¬ p` read as `True`.
+	// Negation (`Not p`) read as `True`.
 	await refused(fixture("Notation"), /^statement isn't the challenge's$/);
 	// `a ++ b` read as `[]`.
 	await refused(fixture("Instance"), /^statement isn't the challenge's$/);
