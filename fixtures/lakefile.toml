@@ -6,3 +6,7 @@ name = "Cronch"
 [[lean_lib]]
 name = "Fixtures"
 globs = ["Fixtures.+"]
+
+[[lean_lib]]
+name = "Reasoning"
+globs = ["Reasoning.+"]

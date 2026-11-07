@@ -36,6 +36,22 @@ Export the challenge and the solution alike, with the names in `EXPORTED`:
 lake env leanexport Solution -- obligation Quot Quot.mk ... outParam
 ```
 
+## Constrained reasoning
+
+A harness can act only on what a checked proof shows, from a fixed theory and from facts trusted results gave ([Constrained reasoning](https://linear.app/cronch-ai/document/constrained-reasoning-acting-only-on-what-follows-from-a-fixed-theory-79e80245ee7f)). Each call's statement depends on the run's facts, so it can't be pinned ahead of time, and full Lean can't elaborate it in a Worker. So the statement is built here, directly as kernel terms:
+
+- The **theory** is an export of a module defining `Gamma`, whose binders are its predicates, each over strings: `def Gamma (damaged late premium refundable : String -> Prop) : Prop`. Export it with `Gamma`, `True` and the names in `EXPORTED` but `obligation`, and pin it when it is published.
+- A **call** is every fact the grant holds, by predicate, and a goal: `{ facts: { late: ["812"], premium: ["812"] }, goal: { pred: "refundable", args: ["812"] } }`.
+- The **statement** is `forall (damaged late premium refundable : String -> Prop), Gamma damaged late premium refundable -> late "812" -> premium "812" -> refundable "812"`: every fact a hypothesis, sorted and without repeats. It needs only Pi types, applications and string literals, so no elaborator is needed to write it.
+- The goal `"consistent"` instead states `Gamma` with every predicate `True`: a model of the theory in which every atom is true, so the theory with any facts at all is consistent. A platform requires it to publish a theory.
+
+```js
+await lean.statement(theory, call); // { statement } as Lean, for `theorem obligation : <statement> := ...`
+await lean.checkCall(theory, call, solution); // as `check`, against the statement built from the theory
+```
+
+The challenge is the theory's export with `obligation` appended, compared with the solution as any challenge is, so a solution can't redefine `Gamma`, and nanoda checks it with the same axioms. The Lean text is a convenience: a solution elaborated from other text doesn't match. The fixtures are `fixtures/Reasoning/`: the refund policy, a proof, and the attacks on it.
+
 ## Development
 
 You need the Rust toolchain in `rust-toolchain.toml` and Node 24. The dev container provides both.
