@@ -5,7 +5,7 @@
 	"scripts": {
 		"build": "./scripts/build.sh",
 		"test": "npm test --prefix javascript",
-		"lint": "biome ci .",
+		"lint": "biome ci . && node scripts/ascii.mjs",
 		"format": "biome check --write .",
 		"prepare": "simple-git-hooks"
 	},

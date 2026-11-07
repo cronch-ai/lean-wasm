@@ -33,7 +33,7 @@ await lean.check(challenge, solution); // { result: "accepted" } or { result: "r
 Export the challenge and the solution alike, with the names in `EXPORTED`:
 
 ```sh
-lake env leanexport Solution -- obligation Quot Quot.mk … outParam
+lake env leanexport Solution -- obligation Quot Quot.mk ... outParam
 ```
 
 ## Development
