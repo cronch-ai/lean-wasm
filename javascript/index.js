@@ -56,40 +56,65 @@ export async function instantiate(source) {
 			? source
 			: await WebAssembly.compile(source);
 
-	return {
-		async check(challenge, solution) {
-			// Each check has its own instance: a refusal can trap, and leaves nothing behind.
-			const instance = await WebAssembly.instantiate(module, {});
-			const x = instance.exports;
-			const write = (input) => {
-				const bytes = typeof input === "string" ? encoder.encode(input) : input;
-				const ptr = x.alloc(bytes.length);
-				new Uint8Array(x.memory.buffer, ptr, bytes.length).set(bytes);
-				return [ptr, bytes.length];
+	/** Runs `entry` over the inputs in an instance of its own: a refusal can trap, and leaves nothing behind. */
+	async function call_(entry, ...inputs) {
+		const instance = await WebAssembly.instantiate(module, {});
+		const x = instance.exports;
+		const write = (input) => {
+			const bytes = typeof input === "string" ? encoder.encode(input) : input;
+			const ptr = x.alloc(bytes.length);
+			new Uint8Array(x.memory.buffer, ptr, bytes.length).set(bytes);
+			return [ptr, bytes.length];
+		};
+		const message = () =>
+			decoder.decode(
+				new Uint8Array(x.memory.buffer, x.message_ptr(), x.message_len()),
+			);
+		const memoryBytes = () => x.memory.buffer.byteLength;
+		try {
+			const status = x[entry](...inputs.flatMap(write));
+			return {
+				ok: status === 0,
+				message: message(),
+				memoryBytes: memoryBytes(),
 			};
-			const message = () =>
-				decoder.decode(
-					new Uint8Array(x.memory.buffer, x.message_ptr(), x.message_len()),
-				);
-			const memoryBytes = () => x.memory.buffer.byteLength;
-			try {
-				if (x.check(...write(challenge), ...write(solution)) === 0) {
-					return { result: "accepted", memoryBytes: memoryBytes() };
-				}
-				return {
-					result: "refused",
-					reason: message(),
-					memoryBytes: memoryBytes(),
-				};
-			} catch (e) {
-				if (!(e instanceof WebAssembly.RuntimeError)) throw e;
-				// nanoda panicked, or ran out of stack or memory.
-				return {
-					result: "refused",
-					reason: message() || e.message,
-					memoryBytes: memoryBytes(),
-				};
-			}
+		} catch (e) {
+			if (!(e instanceof WebAssembly.RuntimeError)) throw e;
+			// nanoda panicked, or ran out of stack or memory.
+			return {
+				ok: false,
+				message: message() || e.message,
+				memoryBytes: memoryBytes(),
+			};
+		}
+	}
+
+	const verdict = ({ ok, message, memoryBytes }) =>
+		ok
+			? { result: "accepted", memoryBytes }
+			: { result: "refused", reason: message, memoryBytes };
+
+	return {
+		/** Whether `solution` proves the pinned `challenge`'s `obligation`. */
+		async check(challenge, solution) {
+			return verdict(await call_("check", challenge, solution));
+		},
+
+		/**
+		 * Whether `solution` proves what `call` asks of the pinned `theory`: constrained reasoning's statement, built
+		 * here from the theory's `Gamma`, every fact in `call.facts` and `call.goal` (an atom `{ pred, args }`, or
+		 * `"consistent"`).
+		 */
+		async checkCall(theory, call, solution) {
+			return verdict(
+				await call_("check_call", theory, JSON.stringify(call), solution),
+			);
+		},
+
+		/** The statement `checkCall` checks, as Lean: `{ statement }`, or `{ error }`. */
+		async statement(theory, call) {
+			const out = await call_("statement", theory, JSON.stringify(call));
+			return out.ok ? { statement: out.message } : { error: out.message };
 		},
 	};
 }
