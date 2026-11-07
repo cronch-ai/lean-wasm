@@ -116,5 +116,13 @@ export async function instantiate(source) {
 			const out = await call_("statement", theory, JSON.stringify(call));
 			return out.ok ? { statement: out.message } : { error: out.message };
 		},
+
+		/** The theory's predicates, in `Gamma`'s order: `{ predicates: [{ name, arity }] }`, or `{ error }`. */
+		async predicates(theory) {
+			const out = await call_("predicates", theory);
+			return out.ok
+				? { predicates: JSON.parse(out.message) }
+				: { error: out.message };
+		},
 	};
 }

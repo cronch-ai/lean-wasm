@@ -5,7 +5,8 @@
 //! declaration in it, permitting no axiom but `propext`, `Quot.sound` and `Classical.choice`.
 //!
 //! `check_call` does the same against a challenge it builds: constrained reasoning's statement, from a pinned theory
-//! and a call's facts and goal (`reasoning`). `statement` gives that statement as Lean, for the solution's author.
+//! and a call's facts and goal (`reasoning`). `statement` gives that statement as Lean, for the solution's author, and
+//! `predicates` lists the theory's predicates.
 
 mod compare;
 mod reasoning;
@@ -121,6 +122,26 @@ pub unsafe extern "C" fn statement(theory: *const u8, theory_len: usize, call: *
         }
         Err(e) => {
             set_message(&e);
+            1
+        }
+    }
+}
+
+/// 0 with the theory's predicates as JSON in `message` (`reasoning::predicates`), or 1 with the reason there.
+///
+/// # Safety
+///
+/// The pointer and length must be a buffer from `alloc`, written by the caller.
+#[no_mangle]
+pub unsafe extern "C" fn predicates(theory: *const u8, theory_len: usize) -> i32 {
+    let theory = std::slice::from_raw_parts(theory, theory_len);
+    match reasoning::predicates(theory) {
+        Ok(text) => {
+            set_message(&text);
+            0
+        }
+        Err(e) => {
+            set_message(&format!("the theory: {e}"));
             1
         }
     }
