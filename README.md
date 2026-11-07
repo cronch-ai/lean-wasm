@@ -49,3 +49,7 @@ npm run lint
 The test fixtures are T1's `net.fetch` obligation from the kernel, and the attacks on it. `scripts/fixtures.sh` makes them from `fixtures/Fixtures/`, with Lean 4.35.0 on `PATH`. `fixtures/Cronch/Smt.lean` is the kernel's.
 
 A push to `main` that changes `javascript/package.json`'s version publishes a GitHub release with the npm tarball, `lean.wasm` and `lean.sha256`.
+
+## License
+
+Apache 2.0. `lean.wasm` bundles nanoda and a few Rust crates, under their own licenses: see [NOTICE](javascript/NOTICE).
