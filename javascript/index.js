@@ -91,7 +91,7 @@ export async function instantiate(source) {
 
 	const verdict = ({ ok, message, memoryBytes }) =>
 		ok
-			? { result: "accepted", memoryBytes }
+			? { result: "accepted", declarations: JSON.parse(message), memoryBytes }
 			: { result: "refused", reason: message, memoryBytes };
 
 	return {

@@ -27,7 +27,7 @@ import { EXPORTED, instantiate } from "@cronch/lean";
 import wasm from "@cronch/lean/lean.wasm"; // a compiled module in a Worker; bytes in Node
 
 const lean = await instantiate(wasm);
-await lean.check(challenge, solution); // { result: "accepted" } or { result: "refused", reason }
+await lean.check(challenge, solution); // { result: "accepted", declarations } or { result: "refused", reason }
 ```
 
 Export the challenge and the solution alike, with the names in `EXPORTED`:
@@ -35,6 +35,36 @@ Export the challenge and the solution alike, with the names in `EXPORTED`:
 ```sh
 lake env leanexport Solution -- obligation Quot Quot.mk ... outParam
 ```
+
+## Declarations
+
+An accepted check lists every declaration in the solution's export, ordered by first name: Lean's prelude as the
+solution exported it, and the solution's own. nanoda checked them all.
+
+```js
+{ names: ["obligation"], kind: "thm", digest: "sha256:f73a...", uses: ["obligation._proof_1_1", "statement"],
+  axioms: ["Classical.choice", "Quot.sound", "propext"] }
+```
+
+- **names:** what it declares. An inductive block declares its types, constructors and recursors together.
+- **uses:** the declarations it references directly, by name.
+- **axioms:** every axiom it rests on, through its uses.
+- **digest:** what a proof checker stores it under. It names the declaration whatever export it came from, so a lemma
+  checked in one proof is the same in every other. It changes when anything the declaration says or rests on does.
+
+A digest is SHA-256 over bytes built from tagged parts (`src/declarations.rs`). A number is 8 bytes, big-endian. A
+string is its length as a number, then its UTF-8. A digest is its 32 bytes.
+
+| Part        | Bytes                                                                                                                                                                                                                                                 |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Name        | anonymous `00`; `a.s` is `01`, a's digest, s; `a.i` is `02`, a's digest, i                                                                                                                                                                            |
+| Level       | zero `10`; succ `11`; max `12`; imax `13`; param `14` with its name's digest; each then its parts' digests                                                                                                                                            |
+| Expression  | bvar `20` index; sort `21`; const `22` name, count, levels; app `23`; lam `24` and forall `25` (type, body); let `26` (type, value, body); nat literal `27` and string literal `28` (decimal digits or text); proj `29` (type name, index, structure) |
+| Fields      | `30`, their count, then each key in order with `31` name, `32` names, `33` expression, `34` a list of fields' digests, or `35` a scalar's JSON                                                                                                        |
+| Declaration | `40`, kind, its fields' digest, `01` and a theorem's proof or `00`, then the count of what it uses and, ordered by name, each one's name digest and declaration digest                                                                                |
+
+Binder names and metadata are left out, as in the comparison with the challenge: they don't change what a term means.
+A declaration's own names are in its fields, so two that say the same under different names differ.
 
 ## Constrained reasoning
 
