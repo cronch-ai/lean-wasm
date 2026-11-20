@@ -8,7 +8,7 @@
 //! don't change what a term means, so they are left out. A field this file doesn't know is refused, never compared.
 
 use serde_json::{Map, Value};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 /// The theorem a solution proves, as the kernel's `proofs/check-lean.mjs` names it.
 pub const THEOREM: &str = "obligation";
@@ -54,7 +54,7 @@ pub const BUILTINS: &[&str] = &[
 
 /// A name, level or expression, with its parts as canonical ids.
 #[derive(Clone, PartialEq, Eq, Hash)]
-enum Node {
+pub(crate) enum Node {
     Anonymous,
     Str(u32, String),
     Num(u32, u64),
@@ -76,9 +76,10 @@ enum Node {
 }
 
 #[derive(Default)]
-struct Interner {
+pub(crate) struct Interner {
     ids: HashMap<Node, u32>,
-    nodes: Vec<Node>,
+    /// Every node, by canonical id. A node's parts are interned before it, so they have smaller ids.
+    pub(crate) nodes: Vec<Node>,
 }
 
 impl Interner {
@@ -101,7 +102,7 @@ impl Interner {
         id
     }
 
-    fn show(&self, id: u32) -> String {
+    pub(crate) fn show(&self, id: u32) -> String {
         match &self.nodes[id as usize] {
             Node::Str(pre, s) if matches!(self.nodes[*pre as usize], Node::Anonymous) => s.clone(),
             Node::Str(pre, s) => format!("{}.{s}", self.show(*pre)),
@@ -111,16 +112,34 @@ impl Interner {
     }
 }
 
-/// A declaration: its kind, its canonical form, and the expressions whose constants it uses.
-struct Decl {
-    kind: String,
-    canon: Value,
-    exprs: Vec<u32>,
+/// A field of a declaration's canonical form.
+#[derive(Clone, PartialEq)]
+pub(crate) enum Field {
+    Name(u32),
+    Names(Vec<u32>),
+    Expr(u32),
+    Trees(Vec<Tree>),
+    /// Compared as it is: a number, a flag or a string that isn't an id.
+    Scalar(Value),
+}
+
+/// A declaration's fields, or a part's, by key, in key order.
+pub(crate) type Tree = BTreeMap<String, Field>;
+
+/// A declaration: its kind, the names it declares, its canonical form, the expressions whose constants it uses, and
+/// a theorem's proof, which `canon` and `exprs` leave out.
+#[derive(Clone)]
+pub(crate) struct Decl {
+    pub(crate) kind: String,
+    pub(crate) names: Vec<u32>,
+    pub(crate) canon: Tree,
+    pub(crate) exprs: Vec<u32>,
+    pub(crate) proof: Option<u32>,
 }
 
 /// An export's declarations, by canonical name. Each name an inductive block declares maps to the whole block.
-struct Export {
-    decls: HashMap<u32, Decl>,
+pub(crate) struct Export {
+    pub(crate) decls: HashMap<u32, Decl>,
 }
 
 /// One export's ids, mapped to canonical ids.
@@ -306,27 +325,27 @@ impl Reader<'_> {
 
     /// A declaration's fields with ids made canonical. A theorem's proof is left out: it isn't part of what the
     /// theorem says.
-    fn canon(&self, o: &Map<String, Value>, theorem: bool, exprs: &mut Vec<u32>) -> Result<Value, String> {
-        let mut out = Map::new();
+    fn canon(&self, o: &Map<String, Value>, theorem: bool, exprs: &mut Vec<u32>) -> Result<Tree, String> {
+        let mut out = Tree::new();
         for (k, v) in o {
-            let names = |r: &Self, v: &Value| -> Result<Value, String> {
+            let names = |r: &Self, v: &Value| -> Result<Field, String> {
                 v.as_array()
                     .ok_or_else(|| format!("{k} isn't a list"))?
                     .iter()
-                    .map(|n| r.name(Some(n)).map(Value::from))
+                    .map(|n| r.name(Some(n)))
                     .collect::<Result<Vec<_>, _>>()
-                    .map(Value::from)
+                    .map(Field::Names)
             };
-            let objects = |r: &Self, v: &Value, exprs: &mut Vec<u32>| -> Result<Value, String> {
+            let objects = |r: &Self, v: &Value, exprs: &mut Vec<u32>| -> Result<Field, String> {
                 v.as_array()
                     .ok_or_else(|| format!("{k} isn't a list"))?
                     .iter()
                     .map(|x| r.canon(object(Some(x), k)?, false, exprs))
                     .collect::<Result<Vec<_>, _>>()
-                    .map(Value::from)
+                    .map(Field::Trees)
             };
             let value = match k.as_str() {
-                "name" | "induct" | "ctor" | "typeName" => Value::from(self.name(Some(v))?),
+                "name" | "induct" | "ctor" | "typeName" => Field::Name(self.name(Some(v))?),
                 "all" | "levelParams" => names(self, v)?,
                 // In an inductive block, a list of constructors; in one of its types, a list of their names.
                 "ctors" if v.as_array().is_some_and(|a| a.iter().all(Value::is_number)) => names(self, v)?,
@@ -335,18 +354,18 @@ impl Reader<'_> {
                 "type" | "value" | "rhs" => {
                     let e = self.expr(Some(v))?;
                     exprs.push(e);
-                    Value::from(e)
+                    Field::Expr(e)
                 }
-                s if SCALARS.contains(&s) => v.clone(),
+                s if SCALARS.contains(&s) => Field::Scalar(v.clone()),
                 other => return Err(format!("unknown field {other}")),
             };
             out.insert(k.clone(), value);
         }
-        Ok(Value::Object(out))
+        Ok(out)
     }
 }
 
-fn read(bytes: &[u8], interner: &mut Interner) -> Result<Export, String> {
+pub(crate) fn read(bytes: &[u8], interner: &mut Interner) -> Result<Export, String> {
     let text = std::str::from_utf8(bytes).map_err(|e| e.to_string())?;
     let mut r = Reader {
         interner,
@@ -382,6 +401,10 @@ fn read(bytes: &[u8], interner: &mut Interner) -> Result<Export, String> {
             let body = object(Some(body), &kind).map_err(at)?;
             let mut exprs = Vec::new();
             let canon = r.canon(body, kind == "thm", &mut exprs).map_err(at)?;
+            let proof = match kind.as_str() {
+                "thm" => Some(r.expr(body.get("value")).map_err(at)?),
+                _ => None,
+            };
             let mut declared = Vec::new();
             if kind == "inductive" {
                 for part in ["types", "ctors", "recs"] {
@@ -392,13 +415,15 @@ fn read(bytes: &[u8], interner: &mut Interner) -> Result<Export, String> {
             } else {
                 declared.push(r.name(body.get("name")).map_err(at)?);
             }
+            let decl = Decl {
+                kind: kind.clone(),
+                names: declared.clone(),
+                canon,
+                exprs,
+                proof,
+            };
             for name in declared {
-                let decl = Decl {
-                    kind: kind.clone(),
-                    canon: canon.clone(),
-                    exprs: exprs.clone(),
-                };
-                if decls.insert(name, decl).is_some() {
+                if decls.insert(name, decl.clone()).is_some() {
                     return Err(at(format!("{} is declared twice", r.interner.show(name))));
                 }
             }
@@ -409,7 +434,7 @@ fn read(bytes: &[u8], interner: &mut Interner) -> Result<Export, String> {
 
 /// The constants and structure names `exprs` use, pushed to `todo`. `seen` is shared across calls, so each canonical
 /// expression is walked once.
-fn constants(interner: &Interner, exprs: &[u32], seen: &mut HashSet<u32>, todo: &mut Vec<u32>) {
+pub(crate) fn constants(interner: &Interner, exprs: &[u32], seen: &mut HashSet<u32>, todo: &mut Vec<u32>) {
     let mut stack = exprs.to_vec();
     while let Some(e) = stack.pop() {
         if !seen.insert(e) {

@@ -1,6 +1,27 @@
+/**
+ * A declaration in an accepted solution. Its digest names it whatever export it came from: SHA-256 over its canonical
+ * form, a theorem's proof, and the digest of each declaration it uses (README.md, "Declarations").
+ */
+export interface Declaration {
+	/** What it declares: one name, or every type, constructor and recursor of an inductive block. */
+	readonly names: readonly string[];
+	readonly kind: "def" | "thm" | "axiom" | "opaque" | "quot" | "inductive";
+	/** `sha256:` and 64 lowercase hex digits. */
+	readonly digest: string;
+	/** The declarations it references directly, by name. */
+	readonly uses: readonly string[];
+	/** Every axiom it rests on, through its uses. */
+	readonly axioms: readonly string[];
+}
+
 /** The checker's answer. Only `accepted` means the solution proves the challenge's theorem. */
 export type Checked =
-	| { readonly result: "accepted"; readonly memoryBytes: number }
+	| {
+			readonly result: "accepted";
+			/** Every declaration in the solution's export, ordered by first name. nanoda checked them all. */
+			readonly declarations: readonly Declaration[];
+			readonly memoryBytes: number;
+	  }
 	/** The solution doesn't prove it, or isn't an export the checker can read; `reason` says why. */
 	| {
 			readonly result: "refused";

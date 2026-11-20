@@ -2,13 +2,15 @@
 //!
 //! `check` takes a challenge (the statement, pinned) and a solution (its proof), both in lean4export's format. It
 //! accepts the solution when its `obligation` says what the challenge's does (`compare`), and nanoda checks every
-//! declaration in it, permitting no axiom but `propext`, `Quot.sound` and `Classical.choice`.
+//! declaration in it, permitting no axiom but `propext`, `Quot.sound` and `Classical.choice`. When it accepts, it
+//! reports every declaration in the solution, with its digest, its uses and its axioms (`declarations`).
 //!
 //! `check_call` does the same against a challenge it builds: constrained reasoning's statement, from a pinned theory
 //! and a call's facts and goal (`reasoning`). `statement` gives that statement as Lean, for the solution's author, and
 //! `predicates` lists the theory's predicates.
 
 mod compare;
+mod declarations;
 mod reasoning;
 
 use nanoda_lib::util::Config;
@@ -49,8 +51,9 @@ pub extern "C" fn message_len() -> usize {
     MESSAGE.lock().unwrap_or_else(|e| e.into_inner()).len()
 }
 
-/// 0 when the solution proves the challenge's theorem, or 1 with the reason in `message`. nanoda reports most
-/// errors by panicking: the panic's message is kept, and the instance traps.
+/// 0 when the solution proves the challenge's theorem, with its declarations as JSON in `message`
+/// (`declarations::report`), or 1 with the reason there. nanoda reports most errors by panicking: the panic's message
+/// is kept, and the instance traps.
 ///
 /// # Safety
 ///
@@ -66,7 +69,10 @@ pub unsafe extern "C" fn check(
     let challenge = std::slice::from_raw_parts(challenge, challenge_len);
     let solution = std::slice::from_raw_parts(solution, solution_len);
     match run(challenge, solution) {
-        Ok(()) => 0,
+        Ok(report) => {
+            set_message(&report);
+            0
+        }
         Err(e) => {
             set_message(&e);
             1
@@ -98,7 +104,10 @@ pub unsafe extern "C" fn check_call(
         .and_then(|call| reasoning::challenge(theory, &call).map_err(|e| format!("the theory: {e}")))
         .and_then(|challenge| run(&challenge, solution));
     match checked {
-        Ok(()) => 0,
+        Ok(report) => {
+            set_message(&report);
+            0
+        }
         Err(e) => {
             set_message(&e);
             1
@@ -151,10 +160,11 @@ fn parse_call(call: &[u8]) -> Result<reasoning::Call, String> {
     reasoning::Call::parse(call).map_err(|e| format!("the call: {e}"))
 }
 
-fn run(challenge: &[u8], solution: &[u8]) -> Result<(), String> {
+/// The solution's declarations, once it proves the challenge's theorem and nanoda has checked every one.
+fn run(challenge: &[u8], solution: &[u8]) -> Result<String, String> {
     compare::compare(challenge, solution)?;
     let config: Config = serde_json::from_str(CONFIG).map_err(|e| e.to_string())?;
     let (export, _) = nanoda_lib::parser::parse_export_file(solution, config).map_err(|e| format!("nanoda: {e}"))?;
     export.check_all_declars_serial();
-    Ok(())
+    declarations::report(solution).map_err(|e| format!("the solution: {e}"))
 }
